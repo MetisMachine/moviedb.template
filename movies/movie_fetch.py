@@ -3,22 +3,25 @@ import sys
 import json
 import gzip
 import requests
-from time import sleep
 from datetime import datetime, timedelta
 from pytz import timezone
-from logger import get_logger
 from constants import *
 from skafossdk import *
 
-# Set up logger and initialize the skafos sdk
-log = get_logger('oddcarl')
-ska = Skafos()
-
-# movie data class
+# Movie data class
 class MovieData(object):
-
-  def __init__(self, api_key, retry=3, backfilled_days=None, file_date=None, batch_size=50):
+  """Fetch movie data from the MOVIE DATABASE: https://developers.themoviedb.org/3/getting-started/introduction"""
+  def __init__(self, api_key, log, retry=3, backfilled_days=None, file_date=None, batch_size=50):
+    """Class constructor for movie data ingester.
+    :param api_key: str. API KEY retrieved from the MOVIE DATABASE.
+    :param log: logger. Records user-defined messages to the Skafos logs.
+    :param retry: int, default 3. Number of retries allowed for each GET request.
+    :param backfilled_days: int, optional. Number of consecutive days in the past for which to fetch movie data.
+    :param file_date: str ('%Y-%m-%d' format), optional. Single date for which to fetch movie data
+    :param batch_size: int, default 50. Number of rows written to the database at a time.
+    """
     self.api_key = api_key
+    self.log = log
     self.retry = retry
     self.base_url = "https://api.themoviedb.org/3/movie/"
     self.tz = timezone('EST')
@@ -43,16 +46,16 @@ class MovieData(object):
       self.filenames = self._create_filenames()
 
   def _create_filenames(self):
+    # Create filenames over a range of dates
     for day in range(self.backfilled_days+1):
       prior_date = self.today - timedelta(days=day)
       yield self._create_filename(prior_date.day, prior_date.month, prior_date.year)
 
   def _create_filename(self, day, month, year):
-    """Filename constructor."""
+    # Create filename from date parts
     day = str(day)
     month = str(month)
     year = str(year)
-
     if len(day) == 1:
       day = '0' + day
     if len(month) == 1:
@@ -61,10 +64,11 @@ class MovieData(object):
     filename = 'movie_ids_' + date_obj + '.json.gz'
     return filename
 
-  def _make_movie_file_request(self, filename):
-    """"""
+  @staticmethod
+  def make_movie_file_request(filename, retry):
+    # GET request to retrieve movie data and store in file
     retries = 0
-    while retries <= self.retry:
+    while retries <= retry:
       try:
         url = "http://files.tmdb.org/p/exports/{}".format(filename)
         response = requests.get(url, stream=True)
@@ -74,139 +78,103 @@ class MovieData(object):
             if chunk:  # filter out keep-alive new chunks
               f.write(chunk)
         break
+      # Catch HTTP errors and break the loop - indicative of some cnx problem
       except requests.exceptions.HTTPError as e:
-        log.debug("{}".format(e))
+        self.log.debug("{}".format(e))
         break
+      # Otherwise retry on all other exceptions
       except Exception as e:
-        log.debug("{}: Failed to make TMDB request on try {}".format(e, retries))
+        self.log.debug("{}: Failed to make TMDB request on try {}".format(e, retries))
         retries += 1
-        if retries <= self.retry:
-          log.info("Trying again!")
+        if retries <= retry:
+          self.log.info("Trying again!")
           continue
         else:
           sys.exit("Max retries reached")
 
+  @staticmethod
+  def parse_movie_file(json_record, filename):
+    # Parse a single line from the json file
+    data = json.loads(json_record)
+    file_date = date_from_filename(filename)
+    return {'movie_id': str(data['id']),
+            'movie_title': data['original_title'].strip(),
+            'popularity': data['popularity'],
+            'ingest_date': str(file_date[2]) + "-" + str(file_date[0]) + "-" + str(file_date[1]),
+            'adult': data.get('adult'),
+            'video': data.get('video')}
+
   def _open_movie_file(self, filename):
-    """Open the downloaded gzip file and map rows to a curated list."""
+    # Open the downloaded gzip file and map rows to a curated list
     if not os.path.isfile(filename):
       self.movies = []
     else:
       with gzip.open(filename, 'rb') as f:
         d = f.readlines()
+        # For each movie, parse the record and store in a list
         self.movies = [parse_movie_file(line, filename) for line in d]
-        log.info('Data found for {} movies!'.format(len(self.movies)))
+        self.log.info('Data found for {} movies!'.format(len(self.movies)))
 
   def _filter_popularity(self, pop):
-    """Filter down movie list by popularity score."""
+    # Filter down movie list by popularity score
     self.movies = list(filter(lambda x: x['popularity'] >= pop, self.movies))
-
-  def _fetch_imdb_id(self, movie_id):
-    """GET request on movie database api to grab the external ids."""
-    sleep(0.25)
-    imdb_id_url = self.base_url + movie_id \
-        + "/external_ids?api_key=" + self.api_key
-    try:
-      response = requests.get(imdb_id_url)
-    except Exception as e:
-      log.debug("{}: Failed to get imdb id for {}".format(e, movie_id))
-      return None
-    raw = json.loads(response.content)
-    return raw.get('imdb_id', None)
 
   def _remove_file(self, filename):
     try:
       os.remove(filename)
     except OSError:
-      log.debug("Unable to remove file {}".format(filename))
+      self.log.debug("Unable to remove file {}".format(filename))
 
   def fetch(self, skafos, filter_pop=None):
     """Fetch the daily movie export list from movie database, parse the data, filter on popularity,
-       and get the external imdb id."""
-    log.info('Making request to TMDB for daily movie list export')
+       write out the data, and remove the file.
+    :param skafos: Skafos. Instantiated Skafos object from the sdk
+    :param filter_pop: int, optional. Lower threshold on popularity score for a movie to be written to database
+    """
+    self.log.info('Making request to TMDB for daily movie list export')
     for f in self.filenames:
-      log.info('Retrieving movie file {}'.format(f))
-      self._make_movie_file_request(f)
+      self.log.info('Retrieving movie file {}'.format(f))
+      self.make_movie_file_request(f, self.retry)
       self._open_movie_file(f)
       # If a filter value is provided - use it
       if filter_pop:
         self._filter_popularity(filter_pop)
-
       # Write the data
       self._write_data(skafos)
-
-      # Remove the file
+      # Remove the file after processing rows to reduce memory needs
       self._remove_file(f)
-
     return self
 
-  def _write_batches(self, engine, logger, schema, data):
-    """Write batches of data to data engine."""
-    for rows in batches(data, self.batch_size):
+  @staticmethod
+  def _write_batches(engine, logger, schema, data, batch_size):
+    # Write batches of data to Skafos Data Engine
+    for rows in batches(data, batch_size):
       res = engine.save(schema, list(rows)).result()
       logger.debug(res)
 
   def _write_data(self, skafos):
-    """Write data out to the data engine in batches and filter out records where imdb_id is null
-      as these will likely be unwanted films."""
-    # Save out using the data engine
+    # Save data out using the Skafos Data Engine
     movie_count = len(self.movies)
-    log.info('Saving {} movie records with the data engine'.format(movie_count))
+    self.log.info('Saving {} movie records with the data engine'.format(movie_count))
     if movie_count == 0:
       pass
     else:
-      self._write_batches(skafos.engine, log, MOVIE_SCHEMA, self.movies)
+      self._write_batches(skafos.engine, self.log, MOVIE_SCHEMA, self.movies, self.batch_size)
 
-def parse_movie_file(x, filename):
-  """Parse the gzip file from the movie database request."""
-  data = json.loads(x)
-  file_date = date_from_filename(filename)
-  return {'movie_id': str(data['id']),
-          'movie_title': data['original_title'].strip(),
-          'popularity': data['popularity'],
-          'ingest_date': str(file_date[2]) + "-" + str(file_date[0]) + "-" + str(file_date[1]),
-          'adult': data.get('adult'),
-          'video': data.get('video')}
-
-def date_from_filename(filename):
-  """Extract the date from a filename."""
-  return filename.split("movie_ids_")[1].split(".json.gz")[0].split("_")
-
-
-def batches(iterable, n):
-  """Divide a single list into a list of lists of size n"""
-  batchLen = len(iterable)
-  for ndx in range(0, batchLen, n):
-    yield list(iterable[ndx:min(ndx + n, batchLen)])
-
-
-if __name__ == "__main__":
-  # Grab some environment variables using os module
-  if 'MOVIE_DB' in os.environ:
-    api_key = os.environ['MOVIE_DB']
-  else:
-    sys.exit('Please save a movie database api key in your environment.')
-
-  if 'POPULARITY' in os.environ:
-    pop = int(os.environ['POPULARITY'])
-  else:
-    pop = 15
-
-  if 'BATCH_SIZE' in os.environ:
-    n = int(os.environ['BATCH_SIZE'])
-  else:
-    n = 50
-
-  if 'BACKFILLED_DAYS' in os.environ:
-    bd = os.environ['BACKFILLED_DAYS']
-  else:
-    bd = None
-
-  if 'FILE_DATE' in os.environ:
-    fd = os.environ['FILE_DATE']
-  else:
-    fd = None
-
-  # Fetch movie data and write to cassandra using the skafos data engine
-  print("Backfill: %s" % bd, flush=True)
-  daily_movie_update = MovieData(api_key, batch_size=n, backfilled_days=bd, file_date=fd).fetch(skafos=ska, filter_pop=pop)
-
+  @staticmethod
+  def date_from_filename(filename):
+    """Extract the date from a filename.
+    :param filename: str ('movie_ids_YYYY_MM_DD.json.gz')
+    """
+    return filename.split("movie_ids_")[1].split(".json.gz")[0].split("_")
+  
+  @staticmethod
+  def batches(iterable, n):
+    """Divide a single list into a list of lists of size n.
+    :param iterable: list or array-like. Object to be divided into n parts.
+    :param n: int. Number of parts to divide iterable into.
+    """
+    batchLen = len(iterable)
+    for ndx in range(0, batchLen, n):
+      yield list(iterable[ndx:min(ndx + n, batchLen)])
+  

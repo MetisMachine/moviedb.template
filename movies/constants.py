@@ -1,7 +1,4 @@
-KEYSPACE = "ea28b544e93cff97e42b770e"
-
 INFO_SCHEMA = {
-    "namespace": KEYSPACE,
     "table_name": "movie_info",
     "options": {
         "primary_key": ["movie_id"],
@@ -21,7 +18,6 @@ INFO_SCHEMA = {
 }
 
 MOVIE_SCHEMA = {
-    "namespace": KEYSPACE,
     "table_name": "movie_list_pop_sorted",
     "options": {
         "primary_key": ["ingest_date", "popularity", "movie_id"],
@@ -34,21 +30,5 @@ MOVIE_SCHEMA = {
         "movie_title": "text",
         "adult": "boolean",
         "video": "boolean"
-    }
-}
-
-RECOMMEND_SCHEMA = {
-    "namespace": KEYSPACE,
-    "table_name": "recommendations",
-    "options": {
-        "primary_key": ["user_id", "rank"],
-        "order_by": ["rank asc"]
-    },
-    "columns": {
-        "user_id": "text",
-        "rank": "int",
-        "movie_id": "text",
-        "pred_rating": "float",
-        "pred_time": "timestamp"
     }
 }
