@@ -27,7 +27,13 @@ This template shows example usage of the Metis Machine platform for the purpose 
 - Once the user is ready to fire it off (after following the dependency steps above):
   - CREATE: a github repository and attach it to the skafos app here --> https://github.com/apps/skafos
   - OPEN: one of the files and make some sort of change (add a comment, add new functionality, change config file, etc)
-  - From Project Directory RUN: `git init`, `git add .`, `git commit -am "<message>"`, ` git remote add origin git@github.com:<organization>/<repository-name>.git`
+  - From Project Directory RUN: 
+  ```
+    $ git init
+    $ git add .
+    $ git commit -am "<message>"
+    $ git remote add origin git@github.com:<organization>/<repository-name>.git
+   ```
   
 ## Deployment
 Once the steps are completed above, the user has deployed their movie data ingester. To check the status of the build or job run `skafos logs --tail` to see realtime updates.
