@@ -5,7 +5,7 @@ This template shows example usage of the Metis Machine platform for the purpose 
 1. User must sign up and aqcuire a free API key from TMDb.
   - Register Here --> https://www.themoviedb.org/account/signup
 2. Set the API key as an environment variable with the skafos CLI.
-  - Run from the terminal (in your project directory): `skafos env API_KEY --set <API KEY>`
+  - Run from the terminal (in your project directory): `skafos env MOVIE_DB --set <API KEY>`
 3. User must have git installed and a github account created --> https://git-scm.com/
 
 ## Project Structure
@@ -34,7 +34,20 @@ This template shows example usage of the Metis Machine platform for the purpose 
     $ git commit -am "<message>"
     $ git remote add origin git@github.com:<organization>/<repository-name>.git
    ```
-  
+
+## Options
+These are the environment variables that could be set from the terminal in the project directory using the Skafos CLI. 
+Only one is required and the others are optional. See below for details.
+
+**required**
+- `MOVIE_DB`: API key from TMDb. See [above](#Dependencies).
+
+**optional**
+- `POPULARITY`, default=15: Lower threshold on popularity score for a particular movie. Note: most films fall above 15.
+- `BATCH_SIZE`, default=10:  Number of rows written to the database at a time.
+- `BACKFILLED_DAYS`: Number of consecutive days in the past for which to fetch movie data.
+- `FILE_DATE`, format=`%Y-%m-%d`: Single date for which to fetch movie data.
+
 ## Deployment
 Once the steps are completed above, the user has deployed their movie data ingester. To check the status of the build or job run `skafos logs --tail` to see realtime updates.
 
