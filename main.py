@@ -1,8 +1,8 @@
 import os
 import sys
-from movie_fetch import MovieData
-from movie_info import MovieInfo
-from logger import get_logger
+from movies.movie_fetch import MovieData
+from movies.movie_info import MovieInfo
+from movies.logger import get_logger
 from skafossdk import *
 
 
