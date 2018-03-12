@@ -3,7 +3,8 @@ from time import sleep
 import numpy as np
 import requests
 from datetime import datetime
-from constants import *
+from movies.constants import *
+from skafossdk import DataSourceType
 
 class MovieInfo(object):
 
@@ -24,12 +25,18 @@ class MovieInfo(object):
   def _get_movie_list(self, skafos):
     # Create a list of the most recent movies that don't have additional data yet
     self.log.info('Setting up view and querying movie list')
-    res = ska.engine.create_view(
+    skafos.engine.save(INFO_SCHEMA, []).result()
+    res = skafos.engine.create_view(
       "list", {"table": "movie_list_pop_sorted"}, DataSourceType.Cassandra).result()
-    res = ska.engine.create_view(
+    res = skafos.engine.create_view(
       "info", {"table": "movie_info"}, DataSourceType.Cassandra).result()
     info_query = "SELECT DISTINCT(movie_id) from info"
-    info = np.array([i.get('movie_id') for i in skafos.engine.query(info_query).result()['data']])
+    info_result = skafos.engine.query(info_query).result()
+    if info_result["data"]:
+      info = np.array([i.get('movie_id') for i in info_result["data"]])
+    else:
+      info = np.array([])
+
     movies_query = "SELECT DISTINCT(movie_id) from list"
     movies = np.array([key.get('movie_id') for key in skafos.engine.query(movies_query).result()['data']])
     self.movies = np.setdiff1d(movies, info, assume_unique=True)
@@ -39,8 +46,7 @@ class MovieInfo(object):
     self.id = movie_data
     self.url = self.base_url + self.id + self.api_key + self.lan
 
-  @staticmethod
-  def make_movie_api_request(movie_id, movie_url, retry):
+  def _make_movie_api_request(self, movie_id, movie_url, retry):
     # GET request to retrieve movie data
     retries = 0
     while retries <= retry:
@@ -118,7 +124,7 @@ class MovieInfo(object):
     self.info = []
     for movie in self.movies:
       self._build_request_url(movie)
-      response = self.make_movie_api_request(self.id, self.url, self.retry)
+      response = self._make_movie_api_request(self.id, self.url, self.retry)
       if not response:
         # Sleep to avoid getting banned!
         sleep(2)
@@ -132,8 +138,7 @@ class MovieInfo(object):
     self._write_data(skafos)
     return self
 
-  @staticmethod
-  def _write_batches(engine, logger, schema, data, batch_size):
+  def _write_batches(self, engine, logger, schema, data, batch_size):
     # Write batches of data to Skafos Data Engine
     for rows in self._batches(data, batch_size):
       res = engine.save(schema, list(rows)).result()

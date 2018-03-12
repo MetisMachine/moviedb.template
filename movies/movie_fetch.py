@@ -5,7 +5,7 @@ import gzip
 import requests
 from datetime import datetime, timedelta
 from pytz import timezone
-from constants import *
+from movies.constants import *
 from skafossdk import *
 
 # Movie data class
@@ -64,8 +64,7 @@ class MovieData(object):
     filename = 'movie_ids_' + date_obj + '.json.gz'
     return filename
 
-  @staticmethod
-  def make_movie_file_request(filename, retry):
+  def _make_movie_file_request(self, filename, retry):
     # GET request to retrieve movie data and store in file
     retries = 0
     while retries <= retry:
@@ -92,11 +91,10 @@ class MovieData(object):
         else:
           sys.exit("Max retries reached")
 
-  @staticmethod
-  def parse_movie_file(json_record, filename):
+  def _parse_movie_file(self, json_record, filename):
     # Parse a single line from the json file
     data = json.loads(json_record)
-    file_date = date_from_filename(filename)
+    file_date = self._date_from_filename(filename)
     return {'movie_id': str(data['id']),
             'movie_title': data['original_title'].strip(),
             'popularity': data['popularity'],
@@ -112,7 +110,7 @@ class MovieData(object):
       with gzip.open(filename, 'rb') as f:
         d = f.readlines()
         # For each movie, parse the record and store in a list
-        self.movies = [parse_movie_file(line, filename) for line in d]
+        self.movies = [self._parse_movie_file(line, filename) for line in d]
         self.log.info('Data found for {} movies!'.format(len(self.movies)))
 
   def _filter_popularity(self, pop):
@@ -134,7 +132,7 @@ class MovieData(object):
     self.log.info('Making request to TMDB for daily movie list export')
     for f in self.filenames:
       self.log.info('Retrieving movie file {}'.format(f))
-      self.make_movie_file_request(f, self.retry)
+      self._make_movie_file_request(f, self.retry)
       self._open_movie_file(f)
       # If a filter value is provided - use it
       if filter_pop:
@@ -145,10 +143,9 @@ class MovieData(object):
       self._remove_file(f)
     return self
 
-  @staticmethod
-  def _write_batches(engine, logger, schema, data, batch_size):
+  def _write_batches(self, engine, logger, schema, data, batch_size):
     # Write batches of data to Skafos Data Engine
-    for rows in batches(data, batch_size):
+    for rows in self._batches(data, batch_size):
       res = engine.save(schema, list(rows)).result()
       logger.debug(res)
 
@@ -162,14 +159,14 @@ class MovieData(object):
       self._write_batches(skafos.engine, self.log, MOVIE_SCHEMA, self.movies, self.batch_size)
 
   @staticmethod
-  def date_from_filename(filename):
+  def _date_from_filename(filename):
     """Extract the date from a filename.
     :param filename: str ('movie_ids_YYYY_MM_DD.json.gz')
     """
     return filename.split("movie_ids_")[1].split(".json.gz")[0].split("_")
-  
+
   @staticmethod
-  def batches(iterable, n):
+  def _batches(iterable, n):
     """Divide a single list into a list of lists of size n.
     :param iterable: list or array-like. Object to be divided into n parts.
     :param n: int. Number of parts to divide iterable into.
@@ -177,4 +174,3 @@ class MovieData(object):
     batchLen = len(iterable)
     for ndx in range(0, batchLen, n):
       yield list(iterable[ndx:min(ndx + n, batchLen)])
-  
