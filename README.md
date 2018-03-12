@@ -1,4 +1,4 @@
-# moviedb.teamplate
+# moviedb.template
 This template shows example usage of the Metis Machine platform for the purpose of data ingestion and curation. Fundamentally, the task is to go out each morning and fetch a list of valid movie IDs from www.themoviebd.org (TMDb) and then retrieve additional data about each film (genres, release date, length, etc).
 
 ## Dependencies
