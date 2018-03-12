@@ -1,0 +1,10 @@
+name: moviedb
+channels:
+  - defaults              
+dependencies:
+  - pip:
+    - pytz==2017.3
+    - requests
+    - skafossdk==0.0.8
+  - numpy
+
