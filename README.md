@@ -6,6 +6,7 @@ This template shows example usage of the Metis Machine platform for the purpose 
   - Register Here --> https://www.themoviedb.org/account/signup
 2. Set the API key as an environment variable with the skafos CLI.
   - Run from the terminal (in your project directory): `skafos env API_KEY --set <API KEY>`
+3. User must have git installed and a github account created --> https://git-scm.com/
 
 ## Project Structure
 - *movies*
@@ -19,4 +20,15 @@ This template shows example usage of the Metis Machine platform for the purpose 
 - *README.md*
 - *main.py*
 
-`movie_fetch.py` and `movie_info.py` contain the classes that handle the ingestion. The `main.py` script is the primary driver for this task.
+## Flow
+- `movie_fetch.py` and `movie_info.py` contain the classes that handle the ingestion using TMDb API calls. Any methods can be expanded to retrieve more or less data as desired. 
+- `main.py` script is the primary driver for this task. At the end, a list of valid movie ID's and associated information will be written to a project keyspace using the Skafos Data Engine.
+- `metis.config.yml` allows the user to configure project specific or runtime specific requirements (schedule, resources, run count, etc). See for more information here --> https://metismachine.readme.io/docs/deploying-tasks.
+- Once the user is ready to fire it off (after following the dependency steps above):
+  - CREATE: a github repository and attach it to the skafos app here --> https://github.com/apps/skafos
+  - OPEN: one of the files and make some sort of change (add a comment, add new functionality, change config file, etc)
+  - From Project Directory RUN: `git init`, `git add .`, `git commit -am "<message>"`, ` git remote add origin git@github.com:<organization>/<repository-name>.git`
+  
+## Deployment
+Once the steps are completed above, the user has deployed their movie data ingester. To check the status of the build or job run `skafos logs --tail` to see realtime updates.
+
