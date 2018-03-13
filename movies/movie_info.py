@@ -135,7 +135,7 @@ class MovieInfo(object):
         cleaned_row = self._convert_empty_values(row)
         if cleaned_row:
           self.info.append(cleaned_row)
-        sleep(0.25)
+        sleep(0.35)
     self._write_data(skafos)
     return self
 
