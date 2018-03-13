@@ -103,6 +103,7 @@ class MovieInfo(object):
         row[key] = None
       else:
         continue
+    return row
 
   def _validate_date(self, date_text, date_format=None):
     # Validate a date string meets format expectations
